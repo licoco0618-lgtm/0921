@@ -1,10 +1,10 @@
 /**
  * 智光商工115學年度新生繡學號管理系統 - 核心邏輯腳本
- * 提供 31 位學生名冊、行動版卡片檢視 / 試算表格雙模切換、
- * 自動算費、即時搜尋與催繳篩選、資料自動儲存與 CSV 匯出匯入
+ * 工作流程：先點選同學姓名 -> 立即出現專屬要繡什麼衣服的品項與收費登記面板
+ * 支援 31 位學生名冊、自動算費、即時搜尋與催繳篩選、資料自動儲存、A4列印與 CSV 匯出匯入
  */
 
-// 品項單價與中英文對照 (依據 03 PDF 規範)
+// 品項單價與定義 (依據 03 PDF 官方規範)
 const ITEM_PRICES = {
   item1: 55, // 夏季短袖制服上衣
   item2: 55, // 冬季長袖制服上衣
@@ -15,17 +15,6 @@ const ITEM_PRICES = {
   item7: 65  // 冬季棒球運動外套
 };
 
-const ITEM_NAMES = {
-  item1: "夏季短袖制服上衣",
-  item2: "冬季長袖制服上衣",
-  item3: "夏季短袖運動上衣",
-  item4: "冬季長袖運動上衣",
-  item5: "各科實習服",
-  item6: "帽子",
-  item7: "冬季棒球運動外套"
-};
-
-// 行動端友善之短品名與圖標定義
 const ITEM_META = {
   item1: { short: "短袖制服", full: "夏季短袖制服上衣", price: 55, icon: "👕" },
   item2: { short: "長袖制服", full: "冬季長袖制服上衣", price: 55, icon: "👔" },
@@ -36,9 +25,9 @@ const ITEM_META = {
   item7: { short: "棒球外套", full: "冬季棒球運動外套", price: 65, icon: "🧥", highlight: true }
 };
 
-const TOTAL_STUDENTS = 31; // 03 收費表固定 31 人
+const TOTAL_STUDENTS = 31; // 官方 03 收費明細表固定 31 人
 
-// 系統核心狀態
+// 系統核心資料狀態
 let appData = {
   className: "資處一仁",
   leaderSign: "",
@@ -47,10 +36,11 @@ let appData = {
   students: []
 };
 
-// 檢視與篩選狀態
-let currentViewMode = "card"; // 'card' 或 'table'
+// 介面與篩選狀態
+let currentViewMode = "picker"; // 'picker' (選人登記模式) 或 'table' (完整試算表)
 let searchKeyword = "";
-let statusFilter = "all";     // 'all' | 'unpaid' | 'paid'
+let statusFilter = "all";       // 'all' | 'unpaid' | 'paid'
+let selectedSeat = 1;           // 當前選中正在登記衣服的學生座號 (1~31)
 
 // 初始化預設 31 位學生名單
 function initDefaultStudents() {
@@ -84,7 +74,6 @@ function loadSavedData() {
       if (!appData.className || appData.className === "資處一甲") {
         appData.className = "資處一仁";
       }
-      // 確保長度至少為 31 人
       while (appData.students.length < TOTAL_STUDENTS) {
         const nextSeat = appData.students.length + 1;
         appData.students.push({
@@ -115,13 +104,12 @@ function loadSavedData() {
 function saveData() {
   try {
     localStorage.setItem("ck_embroidery_data_v1", JSON.stringify(appData));
-    showToast("💾 資料已自動同步儲存！");
   } catch (e) {
     console.error("儲存失敗", e);
   }
 }
 
-// 計算單一學生費用與總件數
+// 計算單一學生金額與總件數
 function calculateStudentTotal(student) {
   let total = 0;
   let count = 0;
@@ -134,55 +122,37 @@ function calculateStudentTotal(student) {
 }
 
 // -------------------------------------------------------------
-// 檢視模式切換 (手機卡片模式 / 試算表格模式)
+// 模式切換：選人登記模式 (picker) vs 完整試算表 (table)
 // -------------------------------------------------------------
-function initViewMode() {
-  const saved = localStorage.getItem("ck_view_mode");
-  if (saved === "card" || saved === "table") {
-    currentViewMode = saved;
-  } else {
-    // 螢幕寬度小於 820px 自動預設卡片模式
-    currentViewMode = window.innerWidth <= 820 ? "card" : "table";
-  }
-  applyViewModeUI();
-}
-
 function switchViewMode(mode) {
   currentViewMode = mode;
-  try {
-    localStorage.setItem("ck_view_mode", mode);
-  } catch(e) {}
-  applyViewModeUI();
-}
-
-function quickToggleViewMode() {
-  switchViewMode(currentViewMode === "card" ? "table" : "card");
-}
-
-function applyViewModeUI() {
-  const btnCard = document.getElementById("btnViewCard");
+  const btnPicker = document.getElementById("btnViewPicker");
   const btnTable = document.getElementById("btnViewTable");
-  const cardsContainer = document.getElementById("studentCardsContainer");
+  const pickerGrid = document.getElementById("studentPickerGrid");
   const tableCard = document.getElementById("tableViewCard");
   const mobileToggleBtn = document.getElementById("mobileToggleModeBtn");
 
-  if (currentViewMode === "card") {
-    if (btnCard) btnCard.classList.add("active");
+  if (mode === "picker") {
+    if (btnPicker) btnPicker.classList.add("active");
     if (btnTable) btnTable.classList.remove("active");
-    if (cardsContainer) cardsContainer.style.display = "grid";
+    if (pickerGrid) pickerGrid.style.display = "grid";
     if (tableCard) tableCard.classList.add("view-hidden");
     if (mobileToggleBtn) mobileToggleBtn.innerHTML = "📊 轉表格";
   } else {
-    if (btnCard) btnCard.classList.remove("active");
+    if (btnPicker) btnPicker.classList.remove("active");
     if (btnTable) btnTable.classList.add("active");
-    if (cardsContainer) cardsContainer.style.display = "none";
+    if (pickerGrid) pickerGrid.style.display = "none";
     if (tableCard) tableCard.classList.remove("view-hidden");
-    if (mobileToggleBtn) mobileToggleBtn.innerHTML = "📱 轉卡片";
+    if (mobileToggleBtn) mobileToggleBtn.innerHTML = "👤 選同學";
   }
 }
 
+function quickToggleViewMode() {
+  switchViewMode(currentViewMode === "picker" ? "table" : "picker");
+}
+
 // -------------------------------------------------------------
-// 搜尋與催繳狀態篩選邏輯
+// 搜尋與篩選邏輯
 // -------------------------------------------------------------
 function handleStudentSearch(val) {
   searchKeyword = (val || "").trim().toLowerCase();
@@ -210,11 +180,9 @@ function setStatusFilter(filter) {
 }
 
 function checkStudentFilterMatch(student) {
-  // 繳費狀態過濾
   if (statusFilter === "unpaid" && student.paid) return false;
   if (statusFilter === "paid" && !student.paid) return false;
 
-  // 搜尋關鍵字過濾 (座號、座號補零、姓名、學號)
   if (searchKeyword) {
     const seatStr = String(student.seat);
     const seatPad = student.seat < 10 ? `0${student.seat}` : `${student.seat}`;
@@ -232,108 +200,13 @@ function checkStudentFilterMatch(student) {
 }
 
 // -------------------------------------------------------------
-// 快速座號跳轉膠囊列
+// 👤 第一步：渲染 31 位同學點選名冊 (一排 6 個)
 // -------------------------------------------------------------
-function renderSeatJumpBar() {
-  const container = document.getElementById("seatJumpScroller");
+function renderStudentPickerGrid() {
+  const container = document.getElementById("studentPickerGrid");
   if (!container) return;
   container.innerHTML = "";
 
-  appData.students.forEach(s => {
-    const btn = document.createElement("button");
-    btn.type = "button";
-    btn.className = `seat-jump-pill ${s.paid ? 'paid' : ''}`;
-    btn.textContent = s.seat;
-    btn.title = `座號 ${s.seat} - ${s.name || '未填姓名'} (${s.paid ? '已繳費' : '未繳費'})`;
-    btn.onclick = () => scrollToStudent(s.seat);
-    container.appendChild(btn);
-  });
-}
-
-function scrollToStudent(seat) {
-  let targetEl;
-  if (currentViewMode === "card") {
-    targetEl = document.getElementById(`card-student-${seat}`);
-  } else {
-    targetEl = document.getElementById(`row-student-${seat}`);
-  }
-
-  if (targetEl) {
-    targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
-    targetEl.classList.add("jump-highlight");
-    setTimeout(() => {
-      targetEl.classList.remove("jump-highlight");
-    }, 1600);
-  }
-}
-
-function scrollToTop() {
-  window.scrollTo({ top: 0, behavior: "smooth" });
-}
-
-// -------------------------------------------------------------
-// 全域渲染器：同步統計、卡片檢視與試算表格
-// -------------------------------------------------------------
-function renderAll() {
-  let classItemTotals = { item1: 0, item2: 0, item3: 0, item4: 0, item5: 0, item6: 0, item7: 0 };
-  let grandTotalAmount = 0;
-  let grandTotalItems = 0;
-  let paidCount = 0;
-  let paidAmount = 0;
-
-  // 1. 計算全域數據
-  appData.students.forEach(student => {
-    const calc = calculateStudentTotal(student);
-    grandTotalAmount += calc.total;
-    grandTotalItems += calc.count;
-    if (student.paid) {
-      paidCount++;
-      paidAmount += calc.total;
-    }
-    for (let key in classItemTotals) {
-      classItemTotals[key] += parseInt(student[key] || 0, 10);
-    }
-  });
-
-  const unpaidCount = TOTAL_STUDENTS - paidCount;
-
-  // 2. 更新頂部儀表板統計
-  updateSummaryStats(grandTotalAmount, grandTotalItems, paidCount, paidAmount);
-
-  // 3. 更新篩選標籤數字
-  const filterCountAll = document.getElementById("filterCountAll");
-  const filterCountUnpaid = document.getElementById("filterCountUnpaid");
-  const filterCountPaid = document.getElementById("filterCountPaid");
-  if (filterCountAll) filterCountAll.textContent = TOTAL_STUDENTS;
-  if (filterCountUnpaid) filterCountUnpaid.textContent = unpaidCount;
-  if (filterCountPaid) filterCountPaid.textContent = paidCount;
-
-  // 4. 更新手機版底部懸浮條
-  const mobileGrandTotal = document.getElementById("mobileSumGrandTotal");
-  const mobilePaid = document.getElementById("mobileSumPaid");
-  const mobilePaidCount = document.getElementById("mobileSumPaidCount");
-  if (mobileGrandTotal) mobileGrandTotal.textContent = `$${grandTotalAmount.toLocaleString()}`;
-  if (mobilePaid) mobilePaid.textContent = `$${paidAmount.toLocaleString()}`;
-  if (mobilePaidCount) mobilePaidCount.textContent = `(${paidCount}/${TOTAL_STUDENTS}人)`;
-
-  // 5. 更新對帳機預期應收金額
-  const expTotalEl = document.getElementById("expectedClassTotal");
-  if (expTotalEl) expTotalEl.textContent = `$${grandTotalAmount.toLocaleString()}`;
-
-  // 6. 渲染卡片與表格
-  renderStudentCards();
-  renderTableRows(classItemTotals, grandTotalAmount);
-  renderSeatJumpBar();
-}
-
-// -------------------------------------------------------------
-// 📱 渲染行動版卡片檢視 (Mobile Card View)
-// -------------------------------------------------------------
-function renderStudentCards() {
-  const container = document.getElementById("studentCardsContainer");
-  if (!container) return;
-
-  container.innerHTML = "";
   let matchedCount = 0;
 
   appData.students.forEach((student, index) => {
@@ -342,67 +215,34 @@ function renderStudentCards() {
 
     matchedCount++;
     const calc = calculateStudentTotal(student);
-    const card = document.createElement("div");
-    card.className = `student-card ${student.paid ? 'card-paid' : 'card-unpaid'}`;
-    card.id = `card-student-${student.seat}`;
+    const seatPad = student.seat < 10 ? `0${student.seat}` : `${student.seat}`;
+    const displayName = student.name ? escapeHtml(student.name) : "未填";
 
-    // 產生品項步進器 HTML
-    let itemsHtml = "";
-    for (let key in ITEM_META) {
-      const meta = ITEM_META[key];
-      const qty = parseInt(student[key] || 0, 10);
-      const isHigh = meta.highlight ? "highlight-jacket" : "";
-      itemsHtml += `
-        <div class="card-item-row ${qty > 0 ? 'active-row' : ''}">
-          <div class="card-item-label">
-            <span class="card-item-icon">${meta.icon}</span>
-            <div class="card-item-names">
-              <span class="card-item-title">${meta.short}</span>
-              <span class="card-item-price-tag ${isHigh}">$${meta.price}</span>
-            </div>
-          </div>
-          <div class="card-stepper">
-            <button type="button" class="card-step-btn" onclick="stepQty(${index}, '${key}', -1)" aria-label="減一">-</button>
-            <input type="number" min="0" max="20" class="card-step-input ${qty > 0 ? 'has-value' : ''}" value="${qty}" onchange="setQty(${index}, '${key}', this.value)">
-            <button type="button" class="card-step-btn" onclick="stepQty(${index}, '${key}', 1)" aria-label="加一">+</button>
-          </div>
-        </div>
-      `;
+    let statusClass = "empty";
+    let statusBadgeHtml = `<span class="grid-status-txt empty">-</span>`;
+
+    if (student.paid) {
+      statusClass = "paid";
+      statusBadgeHtml = `<span class="grid-status-txt paid">✅ $${calc.total}</span>`;
+    } else if (calc.total > 0) {
+      statusClass = "unpaid-items";
+      statusBadgeHtml = `<span class="grid-status-txt unpaid">⚠️ $${calc.total}</span>`;
     }
 
-    card.innerHTML = `
-      <div class="card-header">
-        <div class="card-identity">
-          <div class="card-seat-pill">#${student.seat < 10 ? '0' + student.seat : student.seat}</div>
-          <div class="card-inputs-box">
-            <input type="text" class="card-input-field card-input-name" placeholder="姓名" value="${escapeHtml(student.name)}" onchange="updateStudentInfo(${index}, 'name', this.value)">
-            <input type="text" class="card-input-field card-input-id" placeholder="學號" value="${escapeHtml(student.studentId)}" onchange="updateStudentInfo(${index}, 'studentId', this.value)">
-          </div>
-        </div>
-        <div class="card-status-col">
-          <div class="card-amount-badge" id="card-total-${student.seat}">$${calc.total}</div>
-          <button type="button" class="card-paid-toggle ${student.paid ? 'paid' : 'unpaid'}" onclick="togglePaid(${index}, ${!student.paid})">
-            ${student.paid ? '✅ 已繳費' : '⬜ 點擊繳費'}
-          </button>
-        </div>
-      </div>
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = `student-grid-cell ${statusClass} ${student.seat === selectedSeat ? 'is-selected' : ''}`;
+    btn.id = `picker-item-${student.seat}`;
+    btn.onclick = () => openClothesPicker(student.seat);
+    btn.title = `座號 ${student.seat}：${student.name || '未填姓名'} (點擊選衣服)`;
 
-      <div class="card-body">
-        <div class="card-items-grid">
-          ${itemsHtml}
-        </div>
-      </div>
-
-      <div class="card-footer">
-        <span class="card-summary-txt">送繡合計：<b>${calc.count} 件</b></span>
-        <div class="card-actions-row">
-          <button type="button" class="card-mini-btn" onclick="applyStandardSetToStudent(${index})">⭐ 標準全套(7件)</button>
-          <button type="button" class="card-mini-btn danger" onclick="clearStudentQuantities(${index})">清空</button>
-        </div>
-      </div>
+    btn.innerHTML = `
+      <div class="cell-seat-tag">${seatPad}</div>
+      <div class="cell-name-txt">${displayName}</div>
+      <div class="cell-badge-row">${statusBadgeHtml}</div>
     `;
 
-    container.appendChild(card);
+    container.appendChild(btn);
   });
 
   if (matchedCount === 0) {
@@ -418,7 +258,325 @@ function renderStudentCards() {
 }
 
 // -------------------------------------------------------------
-// 📊 渲染試算表格 (Table View)
+// 👕 第二步：開啟專屬衣服選擇面板 (Clothes Picker Drawer)
+// -------------------------------------------------------------
+function openClothesPicker(seat) {
+  selectedSeat = seat;
+  const drawer = document.getElementById("clothesPickerDrawer");
+  if (!drawer) return;
+
+  drawer.style.display = "flex";
+  document.body.style.overflow = "hidden"; // 防止背景滾動
+
+  renderSelectedStudentClothes();
+  highlightPickerCard(seat);
+}
+
+function closeClothesPicker() {
+  commitCurrentSheetInputs(); // 關閉前確認當前學生姓名已存檔
+  const drawer = document.getElementById("clothesPickerDrawer");
+  if (drawer) {
+    drawer.style.display = "none";
+  }
+  document.body.style.overflow = "";
+  renderAll(); // 關閉時重新整理列表
+}
+
+function handleOverlayClick(event) {
+  if (event.target.id === "clothesPickerDrawer") {
+    closeClothesPicker();
+  }
+}
+
+function highlightPickerCard(seat) {
+  document.querySelectorAll(".student-grid-cell").forEach(c => c.classList.remove("is-selected"));
+  const targetCard = document.getElementById(`picker-item-${seat}`);
+  if (targetCard) {
+    targetCard.classList.add("is-selected");
+  }
+}
+
+// 渲染當前選中學生的衣服清單
+function renderSelectedStudentClothes() {
+  const student = appData.students[selectedSeat - 1];
+  if (!student) return;
+
+  const calc = calculateStudentTotal(student);
+  const seatPad = student.seat < 10 ? `0${student.seat}` : `${student.seat}`;
+
+  // 表頭資訊
+  const seatBadge = document.getElementById("sheetSeatBadge");
+  const nameInput = document.getElementById("sheetStudentName");
+  const idInput = document.getElementById("sheetStudentId");
+  if (seatBadge) seatBadge.textContent = `#${seatPad}`;
+  if (nameInput) nameInput.value = student.name || "";
+  if (idInput) idInput.value = student.studentId || "";
+
+  // 費用與件數
+  const totalAmount = document.getElementById("sheetTotalAmount");
+  const totalQty = document.getElementById("sheetTotalQty");
+  if (totalAmount) totalAmount.textContent = `$${calc.total}`;
+  if (totalQty) totalQty.textContent = `(共 ${calc.count} 件)`;
+
+  // 繳費按鈕狀態
+  const paidBtn = document.getElementById("sheetPaidBtn");
+  if (paidBtn) {
+    if (student.paid) {
+      paidBtn.className = "sheet-paid-btn paid";
+      paidBtn.innerHTML = `✅ 已繳費 $${calc.total}`;
+    } else {
+      paidBtn.className = "sheet-paid-btn unpaid";
+      paidBtn.innerHTML = `⬜ 點擊標記為已繳費`;
+    }
+  }
+
+  // 換人按鈕名稱提示
+  const prevSeat = selectedSeat > 1 ? selectedSeat - 1 : TOTAL_STUDENTS;
+  const nextSeat = selectedSeat < TOTAL_STUDENTS ? selectedSeat + 1 : 1;
+  const prevStudent = appData.students[prevSeat - 1];
+  const nextStudent = appData.students[nextSeat - 1];
+  const btnPrev = document.getElementById("btnPrevStudent");
+  const btnNext = document.getElementById("btnNextStudent");
+  if (btnPrev) btnPrev.textContent = `⬅ 上一位 (#${prevSeat} ${prevStudent.name || ''})`;
+  if (btnNext) btnNext.textContent = `下一位 (#${nextSeat} ${nextStudent.name || ''}) ➡`;
+
+  // 渲染 7 種衣服品項步進器
+  const itemsContainer = document.getElementById("sheetItemsList");
+  if (!itemsContainer) return;
+  itemsContainer.innerHTML = "";
+
+  for (let key in ITEM_META) {
+    const meta = ITEM_META[key];
+    const qty = parseInt(student[key] || 0, 10);
+    const subtotal = qty * meta.price;
+    const isHigh = meta.highlight ? "highlight-jacket" : "";
+
+    const itemRow = document.createElement("div");
+    itemRow.className = `sheet-item-row ${qty > 0 ? 'has-qty' : ''}`;
+    itemRow.innerHTML = `
+      <div class="sheet-item-left">
+        <span class="sheet-item-icon">${meta.icon}</span>
+        <div class="sheet-item-text">
+          <div class="sheet-item-main-title">
+            ${meta.full}
+            <span class="sheet-item-unit-price ${isHigh}">$${meta.price}</span>
+          </div>
+          <div class="sheet-item-subtotal">小計：<b>$${subtotal}</b></div>
+        </div>
+      </div>
+      <div class="sheet-item-stepper">
+        <button type="button" class="sheet-step-btn minus" onclick="stepQtyForSelected('${key}', -1)" aria-label="減少一件">-</button>
+        <input type="number" min="0" max="20" class="sheet-step-val ${qty > 0 ? 'active' : ''}" value="${qty}" onchange="setQtyForSelected('${key}', this.value)">
+        <button type="button" class="sheet-step-btn plus" onclick="stepQtyForSelected('${key}', 1)" aria-label="增加一件">+</button>
+      </div>
+    `;
+    itemsContainer.appendChild(itemRow);
+  }
+}
+
+// 調整當前選中學生的衣服數量
+function stepQtyForSelected(itemKey, delta) {
+  const student = appData.students[selectedSeat - 1];
+  let current = parseInt(student[itemKey] || 0, 10);
+  current = Math.max(0, current + delta);
+  student[itemKey] = current;
+  saveData();
+  renderSelectedStudentClothes();
+  updateGlobalStatsOnly();
+}
+
+function setQtyForSelected(itemKey, val) {
+  const student = appData.students[selectedSeat - 1];
+  let num = parseInt(val, 10);
+  if (isNaN(num) || num < 0) num = 0;
+  student[itemKey] = num;
+  saveData();
+  renderSelectedStudentClothes();
+  updateGlobalStatsOnly();
+}
+
+// 當前選中學生切換繳費狀態
+function toggleSelectedStudentPaid() {
+  const student = appData.students[selectedSeat - 1];
+  student.paid = !student.paid;
+  saveData();
+  renderSelectedStudentClothes();
+  updateGlobalStatsOnly();
+  showToast(student.paid ? `✅ 座號 ${student.seat} 號已標記為【已繳費】！` : `ℹ️ 座號 ${student.seat} 號已改為【未繳費】`);
+}
+
+// 一鍵套用全套 7 件給當前選中學生
+function applyStandardSetToSelected() {
+  const student = appData.students[selectedSeat - 1];
+  student.item1 = 1;
+  student.item2 = 1;
+  student.item3 = 1;
+  student.item4 = 1;
+  student.item5 = 1;
+  student.item6 = 1;
+  student.item7 = 1;
+  saveData();
+  renderSelectedStudentClothes();
+  updateGlobalStatsOnly();
+  showToast(`⭐ 座號 ${student.seat} 號已套用標準全套 7 件 ($395)！`);
+}
+
+// 清空當前選中學生件數
+function clearSelectedStudentQuantities() {
+  const student = appData.students[selectedSeat - 1];
+  student.item1 = 0;
+  student.item2 = 0;
+  student.item3 = 0;
+  student.item4 = 0;
+  student.item5 = 0;
+  student.item6 = 0;
+  student.item7 = 0;
+  student.paid = false;
+  saveData();
+  renderSelectedStudentClothes();
+  updateGlobalStatsOnly();
+  showToast(`🧹 座號 ${student.seat} 號送繡件數已清空！`);
+}
+
+// 即時強制儲存抽屜輸入框中正在輸入的姓名與學號 (防止尚未失焦就切換或匯出造成文字遺失)
+function commitCurrentSheetInputs() {
+  if (selectedSeat >= 1 && selectedSeat <= TOTAL_STUDENTS) {
+    const student = appData.students[selectedSeat - 1];
+    if (student) {
+      const nameInput = document.getElementById("sheetStudentName");
+      const idInput = document.getElementById("sheetStudentId");
+      if (nameInput) student.name = (nameInput.value || "").trim();
+      if (idInput) student.studentId = (idInput.value || "").trim();
+      saveData();
+      const cell = document.querySelector(`#picker-item-${student.seat} .cell-name-txt`);
+      if (cell) cell.textContent = student.name || "未填";
+    }
+  }
+}
+
+// 更新當前選中學生的姓名與學號 (oninput 即時觸發)
+function updateSelectedStudentName(val) {
+  if (selectedSeat < 1 || selectedSeat > TOTAL_STUDENTS) return;
+  const student = appData.students[selectedSeat - 1];
+  if (!student) return;
+  student.name = (val || "").trim();
+  saveData();
+  const cell = document.querySelector(`#picker-item-${student.seat} .cell-name-txt`);
+  if (cell) {
+    cell.textContent = student.name || "未填";
+  }
+}
+
+function updateSelectedStudentId(val) {
+  if (selectedSeat < 1 || selectedSeat > TOTAL_STUDENTS) return;
+  const student = appData.students[selectedSeat - 1];
+  if (!student) return;
+  student.studentId = (val || "").trim();
+  saveData();
+}
+
+// 快速前後換人 (上一位 / 下一位)
+function navigateStudent(delta) {
+  commitCurrentSheetInputs(); // 換人前先將當前輸入框姓名立即存檔！
+  let nextSeat = selectedSeat + delta;
+  if (nextSeat < 1) nextSeat = TOTAL_STUDENTS;
+  if (nextSeat > TOTAL_STUDENTS) nextSeat = 1;
+  openClothesPicker(nextSeat);
+}
+
+// 僅更新頂部與底部統計數據 (不打亂當前彈窗)
+function updateGlobalStatsOnly() {
+  let grandTotalAmount = 0;
+  let grandTotalItems = 0;
+  let paidCount = 0;
+  let paidAmount = 0;
+
+  appData.students.forEach(student => {
+    const calc = calculateStudentTotal(student);
+    grandTotalAmount += calc.total;
+    grandTotalItems += calc.count;
+    if (student.paid) {
+      paidCount++;
+      paidAmount += calc.total;
+    }
+  });
+
+  const unpaidCount = TOTAL_STUDENTS - paidCount;
+  updateSummaryStats(grandTotalAmount, grandTotalItems, paidCount, paidAmount);
+
+  const filterCountAll = document.getElementById("filterCountAll");
+  const filterCountUnpaid = document.getElementById("filterCountUnpaid");
+  const filterCountPaid = document.getElementById("filterCountPaid");
+  if (filterCountAll) filterCountAll.textContent = TOTAL_STUDENTS;
+  if (filterCountUnpaid) filterCountUnpaid.textContent = unpaidCount;
+  if (filterCountPaid) filterCountPaid.textContent = paidCount;
+
+  const mobileGrandTotal = document.getElementById("mobileSumGrandTotal");
+  const mobilePaid = document.getElementById("mobileSumPaid");
+  const mobilePaidCount = document.getElementById("mobileSumPaidCount");
+  if (mobileGrandTotal) mobileGrandTotal.textContent = `$${grandTotalAmount.toLocaleString()}`;
+  if (mobilePaid) mobilePaid.textContent = `$${paidAmount.toLocaleString()}`;
+  if (mobilePaidCount) mobilePaidCount.textContent = `(${paidCount}/${TOTAL_STUDENTS}人)`;
+
+  const expTotalEl = document.getElementById("expectedClassTotal");
+  if (expTotalEl) expTotalEl.textContent = `$${grandTotalAmount.toLocaleString()}`;
+}
+
+// -------------------------------------------------------------
+// 全域總渲染器
+// -------------------------------------------------------------
+function renderAll() {
+  let classItemTotals = { item1: 0, item2: 0, item3: 0, item4: 0, item5: 0, item6: 0, item7: 0 };
+  let grandTotalAmount = 0;
+  let grandTotalItems = 0;
+  let paidCount = 0;
+  let paidAmount = 0;
+
+  appData.students.forEach(student => {
+    const calc = calculateStudentTotal(student);
+    grandTotalAmount += calc.total;
+    grandTotalItems += calc.count;
+    if (student.paid) {
+      paidCount++;
+      paidAmount += calc.total;
+    }
+    for (let key in classItemTotals) {
+      classItemTotals[key] += parseInt(student[key] || 0, 10);
+    }
+  });
+
+  const unpaidCount = TOTAL_STUDENTS - paidCount;
+
+  updateSummaryStats(grandTotalAmount, grandTotalItems, paidCount, paidAmount);
+
+  const filterCountAll = document.getElementById("filterCountAll");
+  const filterCountUnpaid = document.getElementById("filterCountUnpaid");
+  const filterCountPaid = document.getElementById("filterCountPaid");
+  if (filterCountAll) filterCountAll.textContent = TOTAL_STUDENTS;
+  if (filterCountUnpaid) filterCountUnpaid.textContent = unpaidCount;
+  if (filterCountPaid) filterCountPaid.textContent = paidCount;
+
+  const mobileGrandTotal = document.getElementById("mobileSumGrandTotal");
+  const mobilePaid = document.getElementById("mobileSumPaid");
+  const mobilePaidCount = document.getElementById("mobileSumPaidCount");
+  if (mobileGrandTotal) mobileGrandTotal.textContent = `$${grandTotalAmount.toLocaleString()}`;
+  if (mobilePaid) mobilePaid.textContent = `$${paidAmount.toLocaleString()}`;
+  if (mobilePaidCount) mobilePaidCount.textContent = `(${paidCount}/${TOTAL_STUDENTS}人)`;
+
+  const expTotalEl = document.getElementById("expectedClassTotal");
+  if (expTotalEl) expTotalEl.textContent = `$${grandTotalAmount.toLocaleString()}`;
+
+  renderStudentPickerGrid();
+  renderTableRows(classItemTotals, grandTotalAmount);
+
+  const drawer = document.getElementById("clothesPickerDrawer");
+  if (drawer && drawer.style.display !== "none") {
+    renderSelectedStudentClothes();
+  }
+}
+
+// -------------------------------------------------------------
+// 📊 試算表格渲染 (Table View)
 // -------------------------------------------------------------
 function renderTableRows(classItemTotals, grandTotalAmount) {
   const tbody = document.getElementById("studentTableBody");
@@ -438,18 +596,18 @@ function renderTableRows(classItemTotals, grandTotalAmount) {
     tr.innerHTML = `
       <td class="seat-col sticky-col-seat">${student.seat}</td>
       <td class="sticky-col-name">
-        <input type="text" class="cell-input-text" placeholder="姓名" value="${escapeHtml(student.name)}" onchange="updateStudentInfo(${index}, 'name', this.value)">
+        <input type="text" class="cell-input-text" placeholder="姓名" value="${escapeHtml(student.name)}" oninput="updateStudentInfo(${index}, 'name', this.value)" onchange="updateStudentInfo(${index}, 'name', this.value)">
       </td>
       <td>
-        <input type="text" class="cell-input-text" placeholder="學號" value="${escapeHtml(student.studentId)}" onchange="updateStudentInfo(${index}, 'studentId', this.value)">
+        <input type="text" class="cell-input-text" placeholder="學號" value="${escapeHtml(student.studentId)}" oninput="updateStudentInfo(${index}, 'studentId', this.value)" onchange="updateStudentInfo(${index}, 'studentId', this.value)">
       </td>
-      ${renderQtyCell(index, 'item1', student.item1)}
-      ${renderQtyCell(index, 'item2', student.item2)}
-      ${renderQtyCell(index, 'item3', student.item3)}
-      ${renderQtyCell(index, 'item4', student.item4)}
-      ${renderQtyCell(index, 'item5', student.item5)}
-      ${renderQtyCell(index, 'item6', student.item6)}
-      ${renderQtyCell(index, 'item7', student.item7)}
+      ${renderTableQtyCell(index, 'item1', student.item1)}
+      ${renderTableQtyCell(index, 'item2', student.item2)}
+      ${renderTableQtyCell(index, 'item3', student.item3)}
+      ${renderTableQtyCell(index, 'item4', student.item4)}
+      ${renderTableQtyCell(index, 'item5', student.item5)}
+      ${renderTableQtyCell(index, 'item6', student.item6)}
+      ${renderTableQtyCell(index, 'item7', student.item7)}
       <td class="col-total" id="student-total-${student.seat}">$${calc.total}</td>
       <td>
         <label class="status-paid">
@@ -462,7 +620,6 @@ function renderTableRows(classItemTotals, grandTotalAmount) {
     tbody.appendChild(tr);
   });
 
-  // 更新頁底品項加總
   for (let key in classItemTotals) {
     const el = document.getElementById(`footer-${key}`);
     if (el) el.textContent = classItemTotals[key];
@@ -471,31 +628,27 @@ function renderTableRows(classItemTotals, grandTotalAmount) {
   if (footerGrandTotal) footerGrandTotal.textContent = `$${grandTotalAmount.toLocaleString()}`;
 }
 
-// 產生表格數量單元格
-function renderQtyCell(studentIndex, itemKey, value) {
+function renderTableQtyCell(studentIndex, itemKey, value) {
   const numVal = parseInt(value || 0, 10);
   const hasValClass = numVal > 0 ? 'has-value' : '';
   return `
     <td>
       <div class="qty-control">
-        <button type="button" class="qty-btn" onclick="stepQty(${studentIndex}, '${itemKey}', -1)">-</button>
-        <input type="number" min="0" max="20" class="qty-input ${hasValClass}" value="${numVal}" onchange="setQty(${studentIndex}, '${itemKey}', this.value)">
-        <button type="button" class="qty-btn" onclick="stepQty(${studentIndex}, '${itemKey}', 1)">+</button>
+        <button type="button" class="qty-btn" onclick="stepTableQty(${studentIndex}, '${itemKey}', -1)">-</button>
+        <input type="number" min="0" max="20" class="qty-input ${hasValClass}" value="${numVal}" onchange="setTableQty(${studentIndex}, '${itemKey}', this.value)">
+        <button type="button" class="qty-btn" onclick="stepTableQty(${studentIndex}, '${itemKey}', 1)">+</button>
       </div>
     </td>
   `;
 }
 
-// -------------------------------------------------------------
-// 資料更新操作
-// -------------------------------------------------------------
 function updateStudentInfo(index, field, value) {
   appData.students[index][field] = value.trim();
   saveData();
-  renderSeatJumpBar();
+  renderStudentPickerGrid();
 }
 
-function stepQty(index, itemKey, delta) {
+function stepTableQty(index, itemKey, delta) {
   let current = parseInt(appData.students[index][itemKey] || 0, 10);
   current = Math.max(0, current + delta);
   appData.students[index][itemKey] = current;
@@ -503,7 +656,7 @@ function stepQty(index, itemKey, delta) {
   renderAll();
 }
 
-function setQty(index, itemKey, val) {
+function setTableQty(index, itemKey, val) {
   let num = parseInt(val, 10);
   if (isNaN(num) || num < 0) num = 0;
   appData.students[index][itemKey] = num;
@@ -517,38 +670,6 @@ function togglePaid(index, isPaid) {
   renderAll();
 }
 
-// 單一學生快速套用全套
-function applyStandardSetToStudent(index) {
-  const s = appData.students[index];
-  s.item1 = 1;
-  s.item2 = 1;
-  s.item3 = 1;
-  s.item4 = 1;
-  s.item5 = 1;
-  s.item6 = 1;
-  s.item7 = 1;
-  saveData();
-  renderAll();
-  showToast(`✅ 座號 ${s.seat} 號已套用標準全套 7 件 ($395)！`);
-}
-
-// 單一學生件數清空
-function clearStudentQuantities(index) {
-  const s = appData.students[index];
-  s.item1 = 0;
-  s.item2 = 0;
-  s.item3 = 0;
-  s.item4 = 0;
-  s.item5 = 0;
-  s.item6 = 0;
-  s.item7 = 0;
-  s.paid = false;
-  saveData();
-  renderAll();
-  showToast(`🧹 座號 ${s.seat} 號送繡件數已歸零！`);
-}
-
-// 更新儀表板統計顯示
 function updateSummaryStats(totalAmount, totalItems, paidCount, paidAmount) {
   const statAmount = document.getElementById("statGrandTotal");
   const statItems = document.getElementById("statTotalItems");
@@ -560,13 +681,12 @@ function updateSummaryStats(totalAmount, totalItems, paidCount, paidAmount) {
   if (statPaidStudents) statPaidStudents.textContent = `${paidCount} / ${TOTAL_STUDENTS} 人`;
   if (statPaidAmount) statPaidAmount.textContent = `$${paidAmount.toLocaleString()}`;
 
-  // 同步列印表頭資料
   const printClass = document.getElementById("printClassHeader");
   if (printClass) printClass.textContent = appData.className || "______";
 }
 
 // -------------------------------------------------------------
-// 全班批次快捷操作
+// 批次與工具操作
 // -------------------------------------------------------------
 function applyStandardSetToAll() {
   if (!confirm("確定要為全班 31 位同學一鍵套用【標準全套7件組 (各1件)】嗎？\n(包含短制、長制、短運、長運、實習服、帽子、外套，每人 $395 元)")) {
@@ -632,13 +752,189 @@ function clearAllQuantities() {
 }
 
 // -------------------------------------------------------------
-// CSV 匯出與匯入
+// 📊 Excel 與 CSV 完美雙向同步與匯出專區
 // -------------------------------------------------------------
+
+// 1. 匯出 Excel 原生試算表 (.xls) - 保證繁體中文 100% 正確、不亂碼、排版美觀、自動計算金額
+function exportToExcel() {
+  commitCurrentSheetInputs(); // 匯出前強制將正在輸入的姓名學號存檔
+
+  let totalSum = 0;
+  let itemSums = { item1: 0, item2: 0, item3: 0, item4: 0, item5: 0, item6: 0, item7: 0 };
+  let totalItemsCount = 0;
+
+  appData.students.forEach(s => {
+    const calc = calculateStudentTotal(s);
+    totalSum += calc.total;
+    totalItemsCount += calc.count;
+    for (let k in itemSums) itemSums[k] += parseInt(s[k] || 0, 10);
+  });
+
+  let rowsHtml = "";
+  appData.students.forEach(s => {
+    const calc = calculateStudentTotal(s);
+    const signText = s.paid ? "已繳費" : "";
+    rowsHtml += `
+      <tr>
+        <td style="text-align: center; mso-number-format: '0';">${s.seat}</td>
+        <td style="text-align: center; mso-number-format: '\\@'; font-weight: bold;">${escapeHtml(s.name)}</td>
+        <td style="text-align: center; mso-number-format: '\\@';">${escapeHtml(s.studentId)}</td>
+        <td style="text-align: center; mso-number-format: '0';">${s.item1 || 0}</td>
+        <td style="text-align: center; mso-number-format: '0';">${s.item2 || 0}</td>
+        <td style="text-align: center; mso-number-format: '0';">${s.item3 || 0}</td>
+        <td style="text-align: center; mso-number-format: '0';">${s.item4 || 0}</td>
+        <td style="text-align: center; mso-number-format: '0';">${s.item5 || 0}</td>
+        <td style="text-align: center; mso-number-format: '0';">${s.item6 || 0}</td>
+        <td style="text-align: center; mso-number-format: '0'; background-color: #fef3c7; font-weight: bold;">${s.item7 || 0}</td>
+        <td style="text-align: right; mso-number-format: '$#,##0'; font-weight: bold;">$${calc.total}</td>
+        <td style="text-align: center; ${s.paid ? 'color: #16a34a; font-weight: bold;' : ''}">${signText}</td>
+      </tr>
+    `;
+  });
+
+  const excelTemplate = `
+    <html xmlns:o="urn:schemas-microsoft-com:office:office" 
+          xmlns:x="urn:schemas-microsoft-com:office:excel" 
+          xmlns="http://www.w3.org/TR/REC-html40">
+    <head>
+      <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+      <!--[if gte mso 9]>
+      <xml>
+        <x:ExcelWorkbook>
+          <x:ExcelWorksheets>
+            <x:ExcelWorksheet>
+              <x:Name>收費明細表</x:Name>
+              <x:WorksheetOptions>
+                <x:DisplayGridlines/>
+              </x:WorksheetOptions>
+            </x:ExcelWorksheet>
+          </x:ExcelWorksheets>
+        </x:ExcelWorkbook>
+      </xml>
+      <![endif]-->
+      <style>
+        body { font-family: "微軟正黑體", "Microsoft JhengHei", Arial, sans-serif; font-size: 11pt; }
+        table { border-collapse: collapse; table-layout: fixed; width: 100%; }
+        th, td { border: 0.5pt solid #94a3b8; padding: 5px 6px; font-size: 10.5pt; font-family: "微軟正黑體", "Microsoft JhengHei", Arial, sans-serif; }
+        th { background-color: #f1f5f9; font-weight: bold; text-align: center; vertical-align: middle; }
+        .main-title { font-size: 16pt; font-weight: bold; text-align: center; border: none; height: 42px; vertical-align: middle; }
+        .sign-row { font-size: 11pt; font-weight: bold; border: none; height: 32px; vertical-align: middle; }
+        .footer-total { background-color: #e2e8f0; font-weight: bold; }
+      </style>
+    </head>
+    <body>
+      <table>
+        <tr>
+          <td colspan="12" class="main-title">智光商工115學年度新生繡學號各班收費明細表</td>
+        </tr>
+        <tr>
+          <td colspan="3" class="sign-row">班級：${escapeHtml(appData.className || '資處一仁')}</td>
+          <td colspan="3" class="sign-row">班長簽章：${escapeHtml(appData.leaderSign || '')}</td>
+          <td colspan="3" class="sign-row">總務股長簽章：${escapeHtml(appData.affairsSign || '')}</td>
+          <td colspan="3" class="sign-row">導師簽章：${escapeHtml(appData.tutorSign || '')}</td>
+        </tr>
+        <tr>
+          <th style="width: 50px;">座號</th>
+          <th style="width: 85px;">姓名</th>
+          <th style="width: 95px;">學號</th>
+          <th style="width: 95px;">夏季短袖<br>制服上衣 ($55)</th>
+          <th style="width: 95px;">冬季長袖<br>制服上衣 ($55)</th>
+          <th style="width: 95px;">夏季短袖<br>運動上衣 ($55)</th>
+          <th style="width: 95px;">冬季長袖<br>運動上衣 ($55)</th>
+          <th style="width: 85px;">各科<br>實習服 ($55)</th>
+          <th style="width: 70px;">帽子<br>($55)</th>
+          <th style="width: 105px; background-color: #fef3c7; color: #b45309;">冬季棒球<br>運動外套 ($65)</th>
+          <th style="width: 85px;">合計 (元)</th>
+          <th style="width: 80px;">簽名/繳費</th>
+        </tr>
+        ${rowsHtml}
+        <tr class="footer-total">
+          <td colspan="3" style="text-align: center; font-weight: bold;">全班各品項總件數合計</td>
+          <td style="text-align: center; font-weight: bold;">${itemSums.item1}</td>
+          <td style="text-align: center; font-weight: bold;">${itemSums.item2}</td>
+          <td style="text-align: center; font-weight: bold;">${itemSums.item3}</td>
+          <td style="text-align: center; font-weight: bold;">${itemSums.item4}</td>
+          <td style="text-align: center; font-weight: bold;">${itemSums.item5}</td>
+          <td style="text-align: center; font-weight: bold;">${itemSums.item6}</td>
+          <td style="text-align: center; font-weight: bold; background-color: #fef3c7;">${itemSums.item7}</td>
+          <td style="text-align: right; font-weight: bold; color: #1e3a8a;">$${totalSum.toLocaleString()}</td>
+          <td style="text-align: center;">共${totalItemsCount}件</td>
+        </tr>
+      </table>
+    </body>
+    </html>
+  `;
+
+  const blob = new Blob([excelTemplate], { type: "application/vnd.ms-excel;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.setAttribute("href", url);
+  link.setAttribute("download", `03_智光商工115學年度新生繡學號各班收費明細表_${appData.className || '各班'}_31人.xls`);
+  document.body.appendChild(link);
+  link.click();
+  document.body.removeChild(link);
+  showToast("📊 已下載 Excel 專用檔 (.xls)！繁體中文保證 100% 正確不亂碼！");
+}
+
+// 2. 一鍵複製整份名細表至 Excel 剪貼簿 (在 Excel 直接按 Ctrl+V 貼上即可，絕無亂碼)
+function copyTableToClipboard() {
+  commitCurrentSheetInputs();
+
+  let tsv = "智光商工115學年度新生繡學號各班收費明細表\t\t\t\t\t\t\t\t\t\t\t\n";
+  tsv += `班級: ${appData.className || '資處一仁'}\t\t班長簽章: ${appData.leaderSign || ''}\t\t總務股長簽章: ${appData.affairsSign || ''}\t\t導師簽章: ${appData.tutorSign || ''}\t\t\t\t\n`;
+  tsv += "座號\t姓名\t學號\t夏季短袖制服上衣 ($55)\t冬季長袖制服上衣 ($55)\t夏季短袖運動上衣 ($55)\t冬季長袖運動上衣 ($55)\t各科實習服 ($55)\t帽子 ($55)\t冬季棒球運動外套 ($65)\t合計 (元)\t簽名/繳費\n";
+
+  let totalSum = 0;
+  let itemSums = { item1: 0, item2: 0, item3: 0, item4: 0, item5: 0, item6: 0, item7: 0 };
+
+  appData.students.forEach(s => {
+    const calc = calculateStudentTotal(s);
+    totalSum += calc.total;
+    for (let k in itemSums) itemSums[k] += parseInt(s[k] || 0, 10);
+    const signText = s.paid ? "已繳費" : "";
+    tsv += `${s.seat}\t${s.name || ''}\t${s.studentId || ''}\t${s.item1}\t${s.item2}\t${s.item3}\t${s.item4}\t${s.item5}\t${s.item6}\t${s.item7}\t${calc.total}\t${signText}\n`;
+  });
+
+  tsv += `全班統計\t全班總計\t\t${itemSums.item1}\t${itemSums.item2}\t${itemSums.item3}\t${itemSums.item4}\t${itemSums.item5}\t${itemSums.item6}\t${itemSums.item7}\t總額: ${totalSum}元\t\n`;
+
+  if (navigator.clipboard && navigator.clipboard.writeText) {
+    navigator.clipboard.writeText(tsv).then(() => {
+      showToast("📋 已複製全班明細表！請打開 Excel 按 Ctrl+V 貼上，繁體字保證正確！");
+    }).catch(() => {
+      fallbackClipboard(tsv);
+    });
+  } else {
+    fallbackClipboard(tsv);
+  }
+}
+
+function fallbackClipboard(text) {
+  const ta = document.createElement("textarea");
+  ta.value = text;
+  ta.style.position = "fixed";
+  ta.style.left = "-9999px";
+  document.body.appendChild(ta);
+  ta.select();
+  try {
+    document.execCommand("copy");
+    showToast("📋 已複製全班明細表！打開 Excel 按 Ctrl+V 即可直接貼上！");
+  } catch (e) {
+    alert("複製失敗，請直接點選【下載 Excel 檔】！");
+  }
+  document.body.removeChild(ta);
+}
+
+// 3. 匯出標準相容 CSV 檔 (內嵌微軟專用 UTF-8 BOM，解決 Windows Excel 開啟繁體中文亂碼問題)
 function exportToCSV() {
-  let csvContent = "\uFEFF"; // UTF-8 BOM
-  csvContent += `"智光商工115學年度新生繡學號各班收費明細表",,,,,,,,,,\n`;
-  csvContent += `"班級: ${appData.className}","","班長簽章: ${appData.leaderSign}","","總務股長簽章: ${appData.affairsSign}","","導師簽章: ${appData.tutorSign}",,,,\n`;
-  csvContent += `"座號","姓名","學號","夏季短袖制服上衣 ($55)","冬季長袖制服上衣 ($55)","夏季短袖運動上衣 ($55)","冬季長袖運動上衣 ($55)","各科實習服 ($55)","帽子 ($55)","冬季棒球運動外套 ($65)","合計 (元)","繳費狀態"\n`;
+  commitCurrentSheetInputs();
+
+  let csvContent = "\uFEFF"; // 微軟 Excel UTF-8 BOM
+  csvContent += `"智光商工115學年度新生繡學號各班收費明細表",,,,,,,,,,,
+`;
+  csvContent += `"班級: ${escapeCsv(appData.className)}","","班長簽章: ${escapeCsv(appData.leaderSign)}","","總務股長簽章: ${escapeCsv(appData.affairsSign)}","","導師簽章: ${escapeCsv(appData.tutorSign)}",,,,,
+`;
+  csvContent += `"座號","姓名","學號","夏季短袖制服上衣 ($55)","冬季長袖制服上衣 ($55)","夏季短袖運動上衣 ($55)","冬季長袖運動上衣 ($55)","各科實習服 ($55)","帽子 ($55)","冬季棒球運動外套 ($65)","合計 (元)","簽名/繳費"
+`;
 
   let totalSum = 0;
   let itemSums = { item1: 0, item2: 0, item3: 0, item4: 0, item5: 0, item6: 0, item7: 0 };
@@ -648,10 +944,13 @@ function exportToCSV() {
     totalSum += calc.total;
     for (let k in itemSums) itemSums[k] += parseInt(s[k] || 0, 10);
 
-    csvContent += `"${s.seat}","${escapeCsv(s.name)}","${escapeCsv(s.studentId)}","${s.item1}","${s.item2}","${s.item3}","${s.item4}","${s.item5}","${s.item6}","${s.item7}","${calc.total}","${s.paid ? '已繳費' : '未繳費'}"\n`;
+    const signText = s.paid ? "已繳費" : "";
+    csvContent += `"${s.seat}","${escapeCsv(s.name)}","${escapeCsv(s.studentId)}","${s.item1}","${s.item2}","${s.item3}","${s.item4}","${s.item5}","${s.item6}","${s.item7}","${calc.total}","${signText}"
+`;
   });
 
-  csvContent += `"全班統計","全班總計","","${itemSums.item1}","${itemSums.item2}","${itemSums.item3}","${itemSums.item4}","${itemSums.item5}","${itemSums.item6}","${itemSums.item7}","總額: ${totalSum}元",""\n`;
+  csvContent += `"全班統計","全班總計","","${itemSums.item1}","${itemSums.item2}","${itemSums.item3}","${itemSums.item4}","${itemSums.item5}","${itemSums.item6}","${itemSums.item7}","總額: ${totalSum}元",""
+`;
 
   const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
   const url = URL.createObjectURL(blob);
@@ -661,47 +960,139 @@ function exportToCSV() {
   document.body.appendChild(link);
   link.click();
   document.body.removeChild(link);
-  showToast("📥 已成功匯出 31 人收費明細表 CSV！");
+  showToast("📥 已匯出相容 CSV 檔（已加入微軟 UTF-8 BOM 修正字體）！");
 }
 
+// 4. 匯入 CSV/TXT 名冊 (自動偵測 UTF-8、UTF-16 與 Excel 預設 Big5 編碼，解決亂碼問題)
 function handleCSVImport(event) {
   const file = event.target.files[0];
   if (!file) return;
 
   const reader = new FileReader();
   reader.onload = function(e) {
-    const text = e.target.result;
-    const lines = text.split(/\r\n|\n/);
-    let parsedCount = 0;
+    const buffer = e.target.result;
+    const uint8 = new Uint8Array(buffer);
+    let text = "";
 
-    for (let line of lines) {
-      const cols = line.split(",").map(c => c.replace(/^"|"$/g, '').trim());
-      const seatNum = parseInt(cols[0], 10);
-      if (!isNaN(seatNum) && seatNum >= 1 && seatNum <= TOTAL_STUDENTS) {
-        const student = appData.students[seatNum - 1];
-        if (cols[1] !== undefined) student.name = cols[1];
-        if (cols[2] !== undefined) student.studentId = cols[2];
-        if (cols[3] !== undefined) student.item1 = parseInt(cols[3], 10) || 0;
-        if (cols[4] !== undefined) student.item2 = parseInt(cols[4], 10) || 0;
-        if (cols[5] !== undefined) student.item3 = parseInt(cols[5], 10) || 0;
-        if (cols[6] !== undefined) student.item4 = parseInt(cols[6], 10) || 0;
-        if (cols[7] !== undefined) student.item5 = parseInt(cols[7], 10) || 0;
-        if (cols[8] !== undefined) student.item6 = parseInt(cols[8], 10) || 0;
-        if (cols[9] !== undefined) student.item7 = parseInt(cols[9], 10) || 0;
-        parsedCount++;
+    // 檢查是否有 UTF-16LE BOM
+    if (uint8.length >= 2 && uint8[0] === 0xFF && uint8[1] === 0xFE) {
+      text = new TextDecoder("utf-16le").decode(buffer);
+    } else {
+      try {
+        // 先嘗試以嚴格模式 UTF-8 解碼，若遇到無效位元組會拋出例外
+        text = new TextDecoder("utf-8", { fatal: true }).decode(buffer);
+      } catch (err) {
+        // UTF-8 解碼失敗，代表是在繁體中文 Windows Excel 以 Big5 (ANSI/CP950) 儲存的 CSV！
+        try {
+          text = new TextDecoder("big5").decode(buffer);
+        } catch (b5Err) {
+          text = new TextDecoder("utf-8").decode(buffer);
+        }
       }
     }
 
-    saveData();
-    renderAll();
-    showToast(`✅ 成功自 CSV 匯入 ${parsedCount} 位學生資料！`);
+    parseAndLoadCSVText(text);
+    event.target.value = ""; // 重設讓同檔名可以重複上傳
   };
-  reader.readAsText(file, "UTF-8");
+  reader.readAsArrayBuffer(file);
 }
 
-// -------------------------------------------------------------
-// 總務現金對帳機
-// -------------------------------------------------------------
+// 解析並載入名單文字內容
+function parseAndLoadCSVText(text) {
+  if (!text) return;
+  // 去除可能的 BOM
+  if (text.charCodeAt(0) === 0xFEFF) {
+    text = text.slice(1);
+  }
+
+  const lines = text.split(/\r\n|\n/);
+  let parsedCount = 0;
+
+  for (let line of lines) {
+    line = line.trim();
+    if (!line) continue;
+
+    // 解析表頭班級與幹部簽名
+    if (line.includes("班級:") || line.includes("班級：")) {
+      const matchClass = line.match(/班級[：:]\s*([^",\t]+)/);
+      if (matchClass && matchClass[1]) {
+        appData.className = matchClass[1].trim();
+        const ci = document.getElementById("classInput");
+        if (ci) ci.value = appData.className;
+        const pc = document.getElementById("printClassHeader");
+        if (pc) pc.textContent = appData.className;
+      }
+      const matchLeader = line.match(/班長簽章[：:]\s*([^",\t]+)/);
+      if (matchLeader && matchLeader[1]) {
+        appData.leaderSign = matchLeader[1].trim();
+        const li = document.getElementById("leaderInput");
+        if (li) li.value = appData.leaderSign;
+      }
+      const matchAffairs = line.match(/總務股長簽章[：:]\s*([^",\t]+)/);
+      if (matchAffairs && matchAffairs[1]) {
+        appData.affairsSign = matchAffairs[1].trim();
+        const ai = document.getElementById("affairsInput");
+        if (ai) ai.value = appData.affairsSign;
+      }
+      const matchTutor = line.match(/導師簽章[：:]\s*([^",\t]+)/);
+      if (matchTutor && matchTutor[1]) {
+        appData.tutorSign = matchTutor[1].trim();
+        const ti = document.getElementById("tutorInput");
+        if (ti) ti.value = appData.tutorSign;
+      }
+      continue;
+    }
+
+    const cols = splitCsvLine(line);
+    const seatNum = parseInt(cols[0], 10);
+    if (!isNaN(seatNum) && seatNum >= 1 && seatNum <= TOTAL_STUDENTS) {
+      const student = appData.students[seatNum - 1];
+      if (cols[1] !== undefined) student.name = cols[1].trim();
+      if (cols[2] !== undefined) student.studentId = cols[2].trim();
+      if (cols[3] !== undefined) student.item1 = parseInt(cols[3], 10) || 0;
+      if (cols[4] !== undefined) student.item2 = parseInt(cols[4], 10) || 0;
+      if (cols[5] !== undefined) student.item3 = parseInt(cols[5], 10) || 0;
+      if (cols[6] !== undefined) student.item4 = parseInt(cols[6], 10) || 0;
+      if (cols[7] !== undefined) student.item5 = parseInt(cols[7], 10) || 0;
+      if (cols[8] !== undefined) student.item6 = parseInt(cols[8], 10) || 0;
+      if (cols[9] !== undefined) student.item7 = parseInt(cols[9], 10) || 0;
+      if (cols[11] !== undefined) {
+        student.paid = cols[11].includes("已繳") || cols[11].includes("已");
+      }
+      parsedCount++;
+    }
+  }
+
+  saveData();
+  renderAll();
+  showToast(`✅ 成功匯入 ${parsedCount} 位同學名冊與資料！繁體字完全正確！`);
+}
+
+// 支援逗號與 Tab 且支援引號包覆的 CSV 行分割器
+function splitCsvLine(line) {
+  const result = [];
+  let cur = '';
+  let inQuote = false;
+  for (let i = 0; i < line.length; i++) {
+    const char = line[i];
+    if (char === '"') {
+      if (inQuote && line[i + 1] === '"') {
+        cur += '"';
+        i++;
+      } else {
+        inQuote = !inQuote;
+      }
+    } else if ((char === ',' || char === '\t') && !inQuote) {
+      result.push(cur.trim());
+      cur = '';
+    } else {
+      cur += char;
+    }
+  }
+  result.push(cur.trim());
+  return result;
+}
+
 function calcCashTotal() {
   const denominations = [
     { id: "cash-1000", subId: "sub-1000", val: 1000 },
@@ -750,9 +1141,6 @@ function calcCashTotal() {
   }
 }
 
-// -------------------------------------------------------------
-// 分頁切換與系統工具
-// -------------------------------------------------------------
 function switchTab(tabId) {
   document.querySelectorAll(".tab-btn").forEach(b => b.classList.remove("active"));
   document.querySelectorAll(".tab-content").forEach(c => c.classList.remove("active"));
@@ -763,7 +1151,6 @@ function switchTab(tabId) {
   if (targetBtn) targetBtn.classList.add("active");
   if (targetContent) targetContent.classList.add("active");
 
-  // 若切換到非明細表，隱藏手機底部懸浮條以免干擾閱讀
   const mobileBar = document.getElementById("mobileSummaryBar");
   if (mobileBar) {
     mobileBar.style.display = tabId === "tab-fee-detail" ? "flex" : "none";
@@ -777,6 +1164,10 @@ function switchTab(tabId) {
 function triggerPrint() {
   switchTab("tab-fee-detail");
   window.print();
+}
+
+function scrollToTop() {
+  window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
 function showToast(msg) {
@@ -812,9 +1203,8 @@ function escapeCsv(str) {
 // -------------------------------------------------------------
 document.addEventListener("DOMContentLoaded", () => {
   loadSavedData();
-  initViewMode();
+  switchViewMode("picker"); // 預設進入「點名字再選衣服」模式
 
-  // 綁定班級與幹部簽署輸入欄
   const classInput = document.getElementById("classInput");
   if (classInput) {
     classInput.value = appData.className || "資處一仁";
@@ -865,10 +1255,8 @@ document.addEventListener("DOMContentLoaded", () => {
     if (p && appData.tutorSign) p.textContent = ` ${appData.tutorSign}`;
   }
 
-  // 初始渲染
   renderAll();
 
-  // Tab 標籤切換監聽
   document.querySelectorAll(".tab-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       const tabId = btn.getAttribute("data-tab");

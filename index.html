@@ -25,12 +25,18 @@
         <button type="button" class="btn btn-outline-light" onclick="triggerPrint()" title="符合官方A4標準版面">
           🖨️ <span class="btn-text">列印收費表 (A4)</span>
         </button>
-        <button type="button" class="btn btn-success" onclick="exportToCSV()" title="匯出 Excel 相容 CSV">
+        <button type="button" class="btn btn-success" onclick="exportToExcel()" title="下載 Excel 原生試算表 (.xls)，繁體中文 100% 正確不亂碼">
+          📊 <span class="btn-text">下載 Excel 檔</span>
+        </button>
+        <button type="button" class="btn btn-outline-light" onclick="copyTableToClipboard()" title="複製表格內容，打開 Excel 按 Ctrl+V 直接貼上">
+          📋 <span class="btn-text">複製到 Excel</span>
+        </button>
+        <button type="button" class="btn btn-outline-light" onclick="exportToCSV()" title="匯出相容 CSV 檔 (含微軟 UTF-8 BOM)">
           📥 <span class="btn-text">匯出 CSV</span>
         </button>
-        <label class="btn btn-outline-light" style="cursor: pointer; margin: 0;" title="匯入已整理之 CSV 名單">
+        <label class="btn btn-outline-light" style="cursor: pointer; margin: 0;" title="匯入已整理之 CSV 名單 (自動支援 UTF-8 與 Big5)">
           📤 <span class="btn-text">匯入 CSV</span>
-          <input type="file" id="csvFileInput" accept=".csv" style="display: none;" onchange="handleCSVImport(event)">
+          <input type="file" id="csvFileInput" accept=".csv,.txt,.tsv" style="display: none;" onchange="handleCSVImport(event)">
         </label>
       </div>
     </div>
@@ -142,6 +148,23 @@
           <div>
             <span style="font-size: 0.85rem; color: #64748b;">* 資料即時自動存檔，重新整理不遺失</span>
           </div>
+        <div class="excel-sync-bar">
+          <div class="sync-title">📊 <b>Excel 同步與下載專區：</b></div>
+          <div class="sync-buttons">
+            <button type="button" class="btn btn-success btn-sm" onclick="exportToExcel()" title="保證繁體中文微軟正黑體不亂碼、排版美觀、雙擊直接在 Excel 開啟">
+              📊 下載 Excel 檔 (.xls) <span class="badge-tag-sm">⭐ 推薦！繁體字保證正確</span>
+            </button>
+            <button type="button" class="btn btn-primary btn-sm" onclick="copyTableToClipboard()" title="一鍵複製全班明細表，到 Excel 按 Ctrl+V 直接貼上">
+              📋 一鍵複製到 Excel 剪貼簿 (按 Ctrl+V 貼上)
+            </button>
+            <button type="button" class="btn btn-secondary btn-sm" onclick="exportToCSV()" title="含微軟 UTF-8 BOM，相容各式試算表">
+              📥 匯出 CSV 檔 (.csv)
+            </button>
+            <label class="btn btn-secondary btn-sm" style="cursor: pointer; margin: 0;" title="支援 UTF-8 與 Excel 預設 Big5 編碼名冊">
+              📤 匯入 Excel/CSV 名單
+              <input type="file" accept=".csv,.txt,.tsv" style="display: none;" onchange="handleCSVImport(event)">
+            </label>
+          </div>
         </div>
       </div>
 
@@ -149,11 +172,11 @@
       <div class="view-filter-bar">
         <!-- 模式切換鈕 -->
         <div class="view-mode-tabs">
-          <button type="button" class="view-tab-btn active" id="btnViewCard" onclick="switchViewMode('card')">
-            <span class="tab-icon">📱</span> 卡片模式 <span class="badge-pill-sub">手機推薦</span>
+          <button type="button" class="view-tab-btn active" id="btnViewPicker" onclick="switchViewMode('picker')">
+            <span class="tab-icon">👤</span> 選人登記模式 <span class="badge-pill-sub">點名字選衣服</span>
           </button>
           <button type="button" class="view-tab-btn" id="btnViewTable" onclick="switchViewMode('table')">
-            <span class="tab-icon">📊</span> 試算表格 <span class="badge-pill-sub">凍結姓名</span>
+            <span class="tab-icon">📊</span> 完整試算表 <span class="badge-pill-sub">A4對照</span>
           </button>
         </div>
 
@@ -178,17 +201,86 @@
           </div>
         </div>
 
-        <!-- 座號快速跳轉膠囊列 (可橫向流暢滑動 1~31) -->
-        <div class="seat-jump-scroller-wrap">
-          <span class="jump-title">⚡ 快速跳轉：</span>
-          <div class="seat-jump-scroller" id="seatJumpScroller">
-            <!-- 由 app.js 動態產生 1~31 -->
-          </div>
+        <!-- 流程提示引導條 -->
+        <div class="picker-instruction-bar">
+          <span class="instruction-icon">👉</span>
+          <span class="instruction-text"><b>請點選下方同學名字 (一排 6 位，共 31 位)</b>，即可展開選擇要繡的衣服品項：</span>
         </div>
       </div>
 
-      <!-- 📱 行動卡片檢視容器 (卡片模式) -->
-      <div id="studentCardsContainer" class="student-cards-container"></div>
+      <!-- 👤 第一步：31 位同學精美點選名冊 (點擊名字即彈出衣服選擇) -->
+      <div id="studentPickerGrid" class="student-picker-grid"></div>
+
+      <!-- 👕 第二步：點選學生後出現的「專屬衣服送繡登記抽屜面板」 (Modal / Bottom Sheet) -->
+      <div id="clothesPickerDrawer" class="clothes-picker-overlay" style="display: none;" onclick="handleOverlayClick(event)">
+        <div class="clothes-picker-sheet">
+          <!-- 頂部拖曳把手 -->
+          <div class="sheet-drag-bar"></div>
+
+          <!-- 學生身份資訊與關閉按鈕 -->
+          <div class="sheet-header">
+            <div class="sheet-student-info">
+              <div class="sheet-seat-badge" id="sheetSeatBadge">#01</div>
+              <div class="sheet-names-box">
+                <div class="sheet-name-row">
+                  <input type="text" id="sheetStudentName" class="sheet-name-input" placeholder="點此輸入姓名" oninput="updateSelectedStudentName(this.value)" onchange="updateSelectedStudentName(this.value)">
+                  <input type="text" id="sheetStudentId" class="sheet-id-input" placeholder="學號" oninput="updateSelectedStudentId(this.value)" onchange="updateSelectedStudentId(this.value)">
+                </div>
+                <div class="sheet-hint-txt">💡 姓名與學號可直接於此修改，自動存檔</div>
+              </div>
+            </div>
+            <button type="button" class="sheet-close-btn" onclick="closeClothesPicker()" title="關閉">✕</button>
+          </div>
+
+          <!-- 應收金額與繳費狀態切換大按鈕 -->
+          <div class="sheet-status-banner">
+            <div class="sheet-cost-summary">
+              <span class="cost-label">個人送繡金額合計</span>
+              <div class="cost-value-wrap">
+                <b class="cost-total-amount" id="sheetTotalAmount">$0</b>
+                <span class="cost-total-qty" id="sheetTotalQty">(0 件)</span>
+              </div>
+            </div>
+            <button type="button" id="sheetPaidBtn" class="sheet-paid-btn unpaid" onclick="toggleSelectedStudentPaid()">
+              ⬜ 點擊標記為已繳費
+            </button>
+          </div>
+
+          <!-- 快捷操作與單人預設 -->
+          <div class="sheet-preset-row">
+            <button type="button" class="sheet-quick-btn primary" onclick="applyStandardSetToSelected()">
+              ⭐ 一鍵全套 7 件 ($395)
+            </button>
+            <button type="button" class="sheet-quick-btn danger" onclick="clearSelectedStudentQuantities()">
+              🧹 清空件數 ($0)
+            </button>
+          </div>
+
+          <!-- 7 項衣服品項大觸控步進器選擇清單 -->
+          <div class="sheet-clothes-section">
+            <div class="sheet-clothes-title">
+              <span>👕 選擇送繡衣服品項與數量：</span>
+              <span style="font-size: 0.78rem; color: #64748b;">(每件55元 / 外套65元)</span>
+            </div>
+            <div class="sheet-items-list" id="sheetItemsList">
+              <!-- 由 JS 動態渲染 7 項大按鈕步進器 -->
+            </div>
+          </div>
+
+          <!-- 底部快速換人與完成導覽條 -->
+          <div class="sheet-bottom-nav">
+            <button type="button" class="sheet-nav-arrow-btn" onclick="navigateStudent(-1)" id="btnPrevStudent">
+              ⬅ 上一位
+            </button>
+            <button type="button" class="sheet-nav-save-btn" onclick="closeClothesPicker()">
+              ✅ 完成確認
+            </button>
+            <button type="button" class="sheet-nav-arrow-btn" onclick="navigateStudent(1)" id="btnNextStudent">
+              下一位 ➡
+            </button>
+          </div>
+        </div>
+      </div>
 
       <!-- 📊 試算表格檢視容器 (表格模式，列印時強制顯示) -->
       <div class="table-card" id="tableViewCard">

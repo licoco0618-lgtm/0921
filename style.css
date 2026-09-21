@@ -1,7 +1,7 @@
 /* ==========================================================================
    智光商工115學年度新生繡學號管理系統 - 核心與行動端完美響應式樣式表
-   整合：極致行動卡片檢視、左右滑動凍結欄位表格、大觸控步進器、
-   2x2 玻璃質感儀表板、即時催繳篩選、懸浮底部對帳條與 A4 官方列印
+   核心流程：選完同學姓名 -> 立即展開專屬衣服品項大觸控選擇抽屜
+   整合：31人點選名冊、衣服選擇面板、左右凍結欄試算表、2x2儀表板與 A4 官方列印
    ========================================================================== */
 
 :root {
@@ -24,10 +24,10 @@
   --shadow-xs: 0 1px 2px rgba(0, 0, 0, 0.05);
   --shadow-sm: 0 2px 6px rgba(15, 23, 42, 0.06);
   --shadow-md: 0 4px 14px rgba(15, 23, 42, 0.08);
-  --shadow-lg: 0 10px 25px rgba(15, 23, 42, 0.12);
+  --shadow-lg: 0 10px 25px rgba(15, 23, 42, 0.14);
   --radius-sm: 6px;
   --radius-md: 10px;
-  --radius-lg: 14px;
+  --radius-lg: 16px;
   --radius-full: 9999px;
   --font-family: 'Plus Jakarta Sans', 'Noto Sans TC', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   --safe-bottom: env(safe-area-inset-bottom, 0px);
@@ -395,6 +395,46 @@ body {
   align-items: center;
 }
 
+/* Excel 同步與下載專區專屬列 */
+.excel-sync-bar {
+  margin-top: 0.85rem;
+  padding-top: 0.85rem;
+  border-top: 1px dashed var(--border-light);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.65rem;
+  background: linear-gradient(90deg, #f0fdf4 0%, #ffffff 100%);
+  padding: 0.75rem 1rem;
+  border-radius: var(--radius-md);
+  border: 1px solid #bbf7d0;
+}
+
+.sync-title {
+  font-size: 0.9rem;
+  color: #166534;
+  display: flex;
+  align-items: center;
+  gap: 0.35rem;
+}
+
+.sync-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.badge-tag-sm {
+  background: rgba(255, 255, 255, 0.35);
+  font-size: 0.72rem;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-weight: 700;
+  margin-left: 3px;
+}
+
 /* -------------------------------------------------------------
    檢視模式切換、搜尋與催繳篩選工具列 (View & Filter Bar)
    ------------------------------------------------------------- */
@@ -410,7 +450,6 @@ body {
   gap: 0.85rem;
 }
 
-/* 模式切換按鈕組 (iOS 風格膠囊開關) */
 .view-mode-tabs {
   display: flex;
   background: #f1f5f9;
@@ -425,7 +464,7 @@ body {
   align-items: center;
   justify-content: center;
   gap: 0.4rem;
-  padding: 0.6rem 0.8rem;
+  padding: 0.65rem 0.8rem;
   border: none;
   background: transparent;
   border-radius: var(--radius-sm);
@@ -447,7 +486,7 @@ body {
   font-weight: 600;
   background: #e2e8f0;
   color: #334155;
-  padding: 1px 6px;
+  padding: 2px 7px;
   border-radius: var(--radius-full);
 }
 
@@ -456,7 +495,7 @@ body {
   color: var(--primary-color);
 }
 
-/* 搜尋與篩選列 */
+/* 搜尋與催繳狀態篩選 */
 .filter-controls-row {
   display: flex;
   flex-wrap: wrap;
@@ -515,7 +554,6 @@ body {
   font-size: 0.75rem;
 }
 
-/* 繳費狀態快速篩選標籤 */
 .status-filter-group {
   display: flex;
   gap: 0.4rem;
@@ -566,39 +604,287 @@ body {
   border-color: #16a34a;
 }
 
-/* 座號快速跳轉膠囊列 */
-.seat-jump-scroller-wrap {
+/* 提示引導條 */
+.picker-instruction-bar {
   display: flex;
   align-items: center;
   gap: 0.5rem;
-  padding-top: 0.5rem;
-  border-top: 1px dashed var(--border-light);
+  background: #eff6ff;
+  border: 1px solid #bfdbfe;
+  padding: 0.65rem 0.9rem;
+  border-radius: var(--radius-md);
+  font-size: 0.88rem;
+  color: #1e40af;
 }
 
-.jump-title {
+.instruction-icon {
+  font-size: 1.2rem;
+}
+
+/* -------------------------------------------------------------
+   👤 第一步：31 位同學點選名冊 (一排 6 個按鈕網格)
+   ------------------------------------------------------------- */
+.student-picker-grid {
+  display: grid;
+  grid-template-columns: repeat(6, 1fr);
+  gap: 6px;
+  margin-bottom: 2rem;
+}
+
+.student-grid-cell {
+  background: #ffffff;
+  border: 1.5px solid var(--border-light);
+  border-radius: 8px;
+  padding: 6px 2px 5px 2px;
+  min-height: 66px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: space-between;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  position: relative;
+  overflow: hidden;
+  text-align: center;
+  font-family: inherit;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.04);
+  touch-action: manipulation;
+}
+
+.student-grid-cell:hover {
+  transform: translateY(-2px);
+  border-color: #93c5fd;
+  box-shadow: var(--shadow-sm);
+}
+
+.student-grid-cell:active {
+  transform: scale(0.93);
+}
+
+.student-grid-cell.paid {
+  border-color: #86efac;
+  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 70%);
+}
+
+.student-grid-cell.unpaid-items {
+  border-color: #fdba74;
+  background: linear-gradient(180deg, #fff7ed 0%, #ffffff 70%);
+}
+
+.student-grid-cell.is-selected {
+  outline: 2.5px solid #2563eb;
+  border-color: #2563eb;
+  background: #eff6ff;
+}
+
+.cell-seat-tag {
   font-size: 0.8rem;
+  font-weight: 800;
+  color: var(--primary-color);
+  background: var(--primary-light);
+  padding: 1px 4px;
+  border-radius: 4px;
+  line-height: 1.1;
+  width: 90%;
+}
+
+.student-grid-cell.paid .cell-seat-tag {
+  color: #15803d;
+  background: #dcfce7;
+}
+
+.cell-name-txt {
+  font-size: 0.78rem;
   font-weight: 700;
-  color: #64748b;
+  color: #0f172a;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin: 2px 0;
+  line-height: 1.15;
+}
+
+.cell-badge-row {
+  width: 100%;
+  display: flex;
+  justify-content: center;
+}
+
+.grid-status-txt {
+  font-size: 0.66rem;
+  font-weight: 800;
+  line-height: 1;
   white-space: nowrap;
 }
 
-.seat-jump-scroller {
-  display: flex;
-  gap: 0.35rem;
-  overflow-x: auto;
-  padding-bottom: 2px;
-  scrollbar-width: thin;
-  -webkit-overflow-scrolling: touch;
+.grid-status-txt.paid {
+  color: #16a34a;
 }
 
-.seat-jump-pill {
-  min-width: 32px;
-  height: 32px;
-  border-radius: var(--radius-sm);
-  background: #f1f5f9;
+.grid-status-txt.unpaid {
+  color: #ea580c;
+}
+
+.grid-status-txt.empty {
+  color: #94a3b8;
+}
+
+/* -------------------------------------------------------------
+   👕 第二步：專屬衣服選擇抽屜 (Clothes Picker Drawer / Sheet)
+   ------------------------------------------------------------- */
+.clothes-picker-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1000;
+  background: rgba(15, 23, 42, 0.65);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: fadeInOverlay 0.2s ease-out;
+}
+
+@keyframes fadeInOverlay {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.clothes-picker-sheet {
+  background: #ffffff;
+  width: 100%;
+  max-width: 620px;
+  max-height: 92vh;
+  border-radius: 24px 24px 0 0;
+  box-shadow: 0 -10px 40px rgba(0, 0, 0, 0.28);
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  animation: slideUpSheet 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+@keyframes slideUpSheet {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+@media screen and (min-width: 769px) {
+  .clothes-picker-overlay {
+    align-items: center;
+  }
+  .clothes-picker-sheet {
+    border-radius: 20px;
+    max-height: 88vh;
+    animation: zoomInSheet 0.2s ease-out;
+  }
+  @keyframes zoomInSheet {
+    from { opacity: 0; transform: scale(0.94); }
+    to { opacity: 1; transform: scale(1); }
+  }
+}
+
+.sheet-drag-bar {
+  width: 44px;
+  height: 5px;
+  border-radius: var(--radius-full);
+  background: #cbd5e1;
+  margin: 10px auto 4px auto;
+  flex-shrink: 0;
+}
+
+/* 抽屜表頭 */
+.sheet-header {
+  padding: 0.6rem 1.25rem 0.75rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 1px solid var(--border-light);
+  background: #f8fafc;
+}
+
+.sheet-student-info {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.sheet-seat-badge {
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-full);
+  background: var(--primary-color);
+  color: #ffffff;
+  font-weight: 900;
+  font-size: 1.15rem;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 6px rgba(26, 77, 140, 0.3);
+  flex-shrink: 0;
+}
+
+.sheet-names-box {
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+  flex: 1;
+}
+
+.sheet-name-row {
+  display: flex;
+  gap: 0.5rem;
+  align-items: center;
+}
+
+.sheet-name-input {
+  font-size: 1.15rem;
+  font-weight: 800;
+  color: #0f172a;
   border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  outline: none;
+  width: 120px;
+  background: #ffffff;
+  font-family: inherit;
+}
+
+.sheet-name-input:focus {
+  border-color: var(--primary-color);
+  background: #f0f7ff;
+}
+
+.sheet-id-input {
+  font-size: 0.9rem;
+  font-weight: 600;
+  color: #64748b;
+  border: 1px solid var(--border-light);
+  border-radius: 6px;
+  padding: 0.25rem 0.5rem;
+  outline: none;
+  width: 95px;
+  background: #ffffff;
+  font-family: inherit;
+}
+
+.sheet-id-input:focus {
+  border-color: var(--primary-color);
+}
+
+.sheet-hint-txt {
+  font-size: 0.74rem;
+  color: #94a3b8;
+}
+
+.sheet-close-btn {
+  width: 36px;
+  height: 36px;
+  border-radius: var(--radius-full);
+  background: #e2e8f0;
+  border: none;
   color: #334155;
-  font-size: 0.82rem;
+  font-size: 1.2rem;
   font-weight: 700;
   display: flex;
   align-items: center;
@@ -608,265 +894,246 @@ body {
   transition: all 0.15s;
 }
 
-.seat-jump-pill:hover {
-  background: var(--primary-light);
-  color: var(--primary-color);
-  border-color: #93c5fd;
-}
-
-.seat-jump-pill.paid {
-  background: #dcfce7;
-  color: #15803d;
-  border-color: #86efac;
-}
-
-/* -------------------------------------------------------------
-   📱 行動卡片檢視 (Mobile Card View) 樣式
-   ------------------------------------------------------------- */
-.student-cards-container {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
-  gap: 1rem;
-  margin-bottom: 2rem;
-}
-
-.student-card {
-  background: #ffffff;
-  border-radius: var(--radius-lg);
-  border: 1.5px solid var(--border-light);
-  box-shadow: var(--shadow-sm);
-  overflow: hidden;
-  display: flex;
-  flex-direction: column;
-  transition: all 0.2s ease;
-}
-
-.student-card.card-paid {
-  border-color: #86efac;
-  background: linear-gradient(180deg, #f0fdf4 0%, #ffffff 50px);
-}
-
-.student-card.card-unpaid {
-  border-color: #e2e8f0;
-}
-
-.student-card:hover {
-  box-shadow: var(--shadow-md);
-}
-
-/* 跳轉高亮閃爍動畫 */
-.jump-highlight {
-  animation: pulseHighlight 1.5s ease-out;
-}
-
-@keyframes pulseHighlight {
-  0% { outline: 4px solid #2563eb; transform: scale(1.02); }
-  50% { outline: 4px solid #38bdf8; }
-  100% { outline: 4px solid transparent; transform: scale(1); }
-}
-
-/* 卡片表頭 */
-.card-header {
-  padding: 0.85rem 1rem;
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 0.75rem;
-  background: rgba(248, 250, 252, 0.7);
-  border-bottom: 1px solid var(--border-light);
-}
-
-.card-identity {
-  display: flex;
-  align-items: center;
-  gap: 0.65rem;
-  flex: 1;
-}
-
-.card-seat-pill {
-  width: 38px;
-  height: 38px;
-  border-radius: var(--radius-full);
-  background: var(--primary-color);
-  color: #ffffff;
-  font-weight: 800;
-  font-size: 0.95rem;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  flex-shrink: 0;
-  box-shadow: 0 2px 4px rgba(26, 77, 140, 0.25);
-}
-
-.card-inputs-box {
-  display: flex;
-  flex-direction: column;
-  gap: 0.25rem;
-  flex: 1;
-}
-
-.card-input-field {
-  padding: 0.3rem 0.5rem;
-  border: 1px solid var(--border-light);
-  border-radius: 4px;
-  font-size: 0.86rem;
-  outline: none;
-  font-family: inherit;
-  background: #ffffff;
-}
-
-.card-input-field:focus {
-  border-color: var(--primary-color);
-}
-
-.card-input-name {
-  font-weight: 700;
-  color: #0f172a;
-}
-
-.card-input-id {
-  font-size: 0.8rem;
-  color: #64748b;
-}
-
-.card-status-col {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.35rem;
-  flex-shrink: 0;
-}
-
-.card-amount-badge {
-  font-size: 1.25rem;
-  font-weight: 800;
-  color: #b91c1c;
-}
-
-.card-paid-toggle {
-  padding: 0.35rem 0.65rem;
-  border-radius: var(--radius-full);
-  font-size: 0.8rem;
-  font-weight: 700;
-  cursor: pointer;
-  border: 1.5px solid transparent;
-  transition: all 0.2s;
-  min-height: 34px;
-  touch-action: manipulation;
-}
-
-.card-paid-toggle.paid {
-  background: #dcfce7;
-  color: #15803d;
-  border-color: #86efac;
-}
-
-.card-paid-toggle.unpaid {
-  background: #f1f5f9;
-  color: #64748b;
-  border-color: #cbd5e1;
-}
-
-/* 卡片內部品項網格 */
-.card-body {
-  padding: 0.85rem 1rem;
-  flex: 1;
-}
-
-.card-items-grid {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 0.55rem;
-}
-
-.card-item-row {
-  background: #f8fafc;
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-md);
-  padding: 0.45rem 0.6rem;
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  gap: 0.4rem;
-  transition: background 0.15s, border-color 0.15s;
-}
-
-.card-item-row.active-row {
-  background: #eff6ff;
-  border-color: #bfdbfe;
-}
-
-.card-item-label {
-  display: flex;
-  align-items: center;
-  gap: 0.4rem;
-}
-
-.card-item-icon {
-  font-size: 1.15rem;
-}
-
-.card-item-names {
-  display: flex;
-  flex-direction: column;
-  line-height: 1.2;
-}
-
-.card-item-title {
-  font-size: 0.82rem;
-  font-weight: 700;
-  color: #334155;
-}
-
-.card-item-price-tag {
-  font-size: 0.72rem;
-  color: #64748b;
-  font-weight: 600;
-}
-
-.card-item-price-tag.highlight-jacket {
-  color: #dc2626;
-}
-
-/* 卡片大觸控步進器 (專為手機大指頭優化) */
-.card-stepper {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  background: #ffffff;
-  border: 1.5px solid var(--border-light);
-  border-radius: var(--radius-sm);
-  overflow: hidden;
-  height: 38px;
-}
-
-.card-step-btn {
-  width: 38px;
-  height: 100%;
-  background: #f1f5f9;
-  border: none;
-  color: #1e293b;
-  font-size: 1.15rem;
-  font-weight: 800;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  touch-action: manipulation;
-  transition: background 0.15s;
-}
-
-.card-step-btn:active {
+.sheet-close-btn:hover {
   background: #cbd5e1;
 }
 
-.card-step-input {
+/* 金額與繳費切換條 */
+.sheet-status-banner {
+  padding: 0.85rem 1.25rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #eff6ff;
+  border-bottom: 1px solid #bfdbfe;
+  gap: 0.75rem;
+}
+
+.sheet-cost-summary {
+  display: flex;
+  flex-direction: column;
+}
+
+.cost-label {
+  font-size: 0.74rem;
+  font-weight: 700;
+  color: #1e40af;
+  text-transform: uppercase;
+}
+
+.cost-value-wrap {
+  display: flex;
+  align-items: baseline;
+  gap: 0.35rem;
+}
+
+.cost-total-amount {
+  font-size: 1.55rem;
+  font-weight: 900;
+  color: #b91c1c;
+  line-height: 1.1;
+}
+
+.cost-total-qty {
+  font-size: 0.85rem;
+  font-weight: 700;
+  color: #475569;
+}
+
+.sheet-paid-btn {
+  padding: 0.55rem 1rem;
+  border-radius: var(--radius-full);
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+  border: 2px solid transparent;
+  transition: all 0.2s;
+  min-height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  touch-action: manipulation;
+}
+
+.sheet-paid-btn.paid {
+  background: #16a34a;
+  color: #ffffff;
+  box-shadow: 0 3px 8px rgba(22, 163, 74, 0.35);
+}
+
+.sheet-paid-btn.unpaid {
+  background: #ffffff;
+  color: #334155;
+  border-color: #cbd5e1;
+}
+
+/* 快捷操作列 */
+.sheet-preset-row {
+  padding: 0.65rem 1.25rem;
+  display: flex;
+  gap: 0.6rem;
+  background: #f8fafc;
+  border-bottom: 1px solid var(--border-light);
+}
+
+.sheet-quick-btn {
   flex: 1;
+  padding: 0.45rem 0.65rem;
+  border-radius: var(--radius-sm);
+  font-size: 0.84rem;
+  font-weight: 700;
+  cursor: pointer;
+  border: 1px solid var(--border-light);
+  background: #ffffff;
+  transition: all 0.15s;
+}
+
+.sheet-quick-btn.primary {
+  background: #f0f9ff;
+  color: #0369a1;
+  border-color: #bae6fd;
+}
+.sheet-quick-btn.primary:hover {
+  background: #e0f2fe;
+}
+
+.sheet-quick-btn.danger {
+  background: #fff;
+  color: #dc2626;
+  border-color: #fecaca;
+}
+.sheet-quick-btn.danger:hover {
+  background: #fee2e2;
+}
+
+/* 7 項衣服品項選擇清單 */
+.sheet-clothes-section {
+  padding: 0.85rem 1.25rem;
+  overflow-y: auto;
+  flex: 1;
+  max-height: 48vh;
+  -webkit-overflow-scrolling: touch;
+}
+
+.sheet-clothes-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: #1e293b;
+  margin-bottom: 0.75rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.sheet-items-list {
+  display: flex;
+  flex-direction: column;
+  gap: 0.65rem;
+}
+
+.sheet-item-row {
+  background: #f8fafc;
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-md);
+  padding: 0.65rem 0.85rem;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.sheet-item-row.has-qty {
+  background: #f0fdf4;
+  border-color: #86efac;
+}
+
+.sheet-item-left {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  flex: 1;
+}
+
+.sheet-item-icon {
+  font-size: 1.6rem;
+}
+
+.sheet-item-text {
+  display: flex;
+  flex-direction: column;
+}
+
+.sheet-item-main-title {
+  font-size: 0.96rem;
+  font-weight: 800;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+}
+
+.sheet-item-unit-price {
+  font-size: 0.76rem;
+  font-weight: 700;
+  color: #0369a1;
+  background: #e0f2fe;
+  padding: 1px 6px;
+  border-radius: var(--radius-full);
+}
+
+.sheet-item-unit-price.highlight-jacket {
+  color: #b91c1c;
+  background: #fee2e2;
+}
+
+.sheet-item-subtotal {
+  font-size: 0.8rem;
+  color: #64748b;
+  margin-top: 1px;
+}
+
+.sheet-item-subtotal b {
+  color: #b91c1c;
+}
+
+/* 步進器大按鈕 (44px 完美觸控) */
+.sheet-item-stepper {
+  display: flex;
+  align-items: center;
+  background: #ffffff;
+  border: 1.5px solid var(--border-light);
+  border-radius: var(--radius-md);
+  overflow: hidden;
+  height: 44px;
+}
+
+.sheet-step-btn {
+  width: 44px;
+  height: 100%;
+  border: none;
+  background: #f1f5f9;
+  font-size: 1.35rem;
+  font-weight: 900;
+  color: #1e293b;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  touch-action: manipulation;
+  transition: background 0.1s;
+}
+
+.sheet-step-btn:active {
+  background: #cbd5e1;
+}
+
+.sheet-step-val {
+  width: 42px;
   height: 100%;
   border: none;
   text-align: center;
-  font-size: 0.95rem;
-  font-weight: 800;
+  font-size: 1.15rem;
+  font-weight: 900;
   color: #334155;
   background: transparent;
   outline: none;
@@ -874,86 +1141,60 @@ body {
   -moz-appearance: textfield;
 }
 
-.card-step-input::-webkit-outer-spin-button,
-.card-step-input::-webkit-inner-spin-button {
+.sheet-step-val::-webkit-outer-spin-button,
+.sheet-step-val::-webkit-inner-spin-button {
   -webkit-appearance: none;
   margin: 0;
 }
 
-.card-step-input.has-value {
-  color: #0284c7;
-  font-weight: 900;
+.sheet-step-val.active {
+  color: #16a34a;
 }
 
-/* 卡片底端快捷操作 */
-.card-footer {
-  padding: 0.6rem 1rem;
-  background: #f8fafc;
-  border-top: 1px solid var(--border-light);
+/* 底部導覽與換人按鈕 */
+.sheet-bottom-nav {
+  padding: 0.75rem 1.25rem calc(0.75rem + var(--safe-bottom)) 1.25rem;
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.card-summary-txt {
-  font-size: 0.8rem;
-  color: #475569;
-}
-
-.card-actions-row {
-  display: flex;
-  gap: 0.35rem;
-}
-
-.card-mini-btn {
-  padding: 0.25rem 0.55rem;
-  border: 1px solid var(--border-light);
+  gap: 0.5rem;
   background: #ffffff;
-  border-radius: 4px;
-  font-size: 0.76rem;
-  font-weight: 600;
-  color: #475569;
+  border-top: 1px solid var(--border-light);
+}
+
+.sheet-nav-arrow-btn {
+  flex: 1;
+  padding: 0.65rem 0.5rem;
+  border-radius: var(--radius-sm);
+  background: #f1f5f9;
+  border: 1px solid var(--border-light);
+  font-size: 0.82rem;
+  font-weight: 700;
+  color: #334155;
   cursor: pointer;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
   transition: all 0.15s;
 }
 
-.card-mini-btn:hover {
-  background: #f1f5f9;
-  color: var(--primary-color);
+.sheet-nav-arrow-btn:active {
+  background: #e2e8f0;
 }
 
-.card-mini-btn.danger {
-  color: #dc2626;
-}
-.card-mini-btn.danger:hover {
-  background: #fee2e2;
-}
-
-/* 查無結果狀態 */
-.empty-search-state {
-  grid-column: 1 / -1;
-  background: #ffffff;
-  border: 1.5px dashed var(--border-light);
-  border-radius: var(--radius-lg);
-  padding: 2.5rem 1.5rem;
-  text-align: center;
+.sheet-nav-save-btn {
+  flex: 1.2;
+  padding: 0.65rem 0.85rem;
+  border-radius: var(--radius-sm);
+  background: var(--primary-color);
+  color: #ffffff;
+  border: none;
+  font-size: 0.92rem;
+  font-weight: 800;
+  cursor: pointer;
+  box-shadow: 0 2px 6px rgba(26, 77, 140, 0.3);
 }
 
-.empty-icon {
-  font-size: 2.5rem;
-  margin-bottom: 0.5rem;
-}
-
-.empty-search-state h3 {
-  font-size: 1.15rem;
-  color: #1e293b;
-  margin-bottom: 0.5rem;
-}
-
-.empty-search-state p {
-  font-size: 0.88rem;
-  color: #64748b;
-  margin-bottom: 1rem;
+.sheet-nav-save-btn:active {
+  background: var(--primary-hover);
 }
 
 /* -------------------------------------------------------------
@@ -1020,7 +1261,6 @@ body {
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.06);
 }
 
-/* 左右滑動時凍結「座號」與「姓名」欄位 (Sticky Columns) */
 .sticky-col-seat {
   position: sticky;
   left: 0;
@@ -1575,6 +1815,33 @@ tfoot th.sticky-col-total-label {
   transform: translateX(-50%) translateY(0);
 }
 
+/* 查無結果空狀態 */
+.empty-search-state {
+  grid-column: 1 / -1;
+  background: #ffffff;
+  border: 1.5px dashed var(--border-light);
+  border-radius: var(--radius-lg);
+  padding: 2.5rem 1.5rem;
+  text-align: center;
+}
+
+.empty-icon {
+  font-size: 2.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.empty-search-state h3 {
+  font-size: 1.15rem;
+  color: #1e293b;
+  margin-bottom: 0.5rem;
+}
+
+.empty-search-state p {
+  font-size: 0.88rem;
+  color: #64748b;
+  margin-bottom: 1rem;
+}
+
 /* =============================================================
    📱 行動裝置響應式核心斷點 (@media screen and (max-width: 768px))
    ============================================================= */
@@ -1607,7 +1874,6 @@ tfoot th.sticky-col-total-label {
     font-size: 0.82rem;
   }
 
-  /* 統計卡片改為緊湊 2x2 佈局 */
   .stats-grid {
     grid-template-columns: repeat(2, 1fr);
     gap: 0.65rem;
@@ -1632,7 +1898,6 @@ tfoot th.sticky-col-total-label {
     font-size: 0.75rem;
   }
 
-  /* 班級資訊輸入列改為 2x2 響應式 */
   .class-info-row {
     display: grid;
     grid-template-columns: repeat(2, 1fr);
@@ -1653,7 +1918,6 @@ tfoot th.sticky-col-total-label {
     width: 100% !important;
   }
 
-  /* 快捷工具按鈕群組 */
   .batch-actions-row {
     flex-direction: column;
     align-items: stretch;
@@ -1670,18 +1934,12 @@ tfoot th.sticky-col-total-label {
     text-align: center;
   }
 
-  /* 學生卡片容器 */
-  .student-cards-container {
-    grid-template-columns: 1fr;
-    gap: 0.85rem;
+  /* 依使用者指定：手機上一排 6 個同學按鈕 */
+  .student-picker-grid {
+    grid-template-columns: repeat(6, 1fr);
+    gap: 4px;
   }
 
-  .card-items-grid {
-    grid-template-columns: repeat(2, 1fr);
-    gap: 0.45rem;
-  }
-
-  /* 備註與聯絡卡片堆疊 */
   .info-box-grid {
     grid-template-columns: 1fr;
   }
@@ -1699,7 +1957,7 @@ tfoot th.sticky-col-total-label {
   }
 }
 
-/* 超窄螢幕 (< 420px，如 iPhone SE, 小型 Android) */
+/* 超窄螢幕 (< 420px，如 iPhone SE) */
 @media screen and (max-width: 420px) {
   .brand-section {
     width: 100%;
@@ -1721,10 +1979,6 @@ tfoot th.sticky-col-total-label {
     padding: 0.4rem 0.2rem;
     font-size: 0.78rem;
   }
-
-  .card-items-grid {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* =============================================================
@@ -1738,7 +1992,8 @@ tfoot th.sticky-col-total-label {
   .header-actions,
   .batch-actions-row,
   .view-filter-bar,
-  .student-cards-container,
+  .student-picker-grid,
+  .clothes-picker-overlay,
   .mobile-summary-bar,
   .sys-toast-notification,
   .btn,
@@ -1768,7 +2023,6 @@ tfoot th.sticky-col-total-label {
     display: block !important;
   }
 
-  /* 強制表格在列印時顯現，不受網頁隱藏類別影響 */
   .table-card,
   .table-card.view-hidden {
     display: block !important;
